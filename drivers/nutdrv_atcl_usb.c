@@ -67,6 +67,9 @@ static usb_device_id_t atcl_usb_id[] = {
 static usb_dev_handle	*udev = NULL;
 static USBDevice_t	usbdevice;
 static unsigned int	comm_failures = 0;
+#if WITH_LIBUSB_1_0
+static int		libusb_inited = 0;
+#endif
 
 /* Forward decls */
 static int instcmd(const char *cmdname, const char *extra);
@@ -255,7 +258,6 @@ static int usb_device_close(usb_dev_handle *handle)
 
 #if WITH_LIBUSB_1_0
 	libusb_close(handle);
-	libusb_exit(NULL);
 #else
 	ret = usb_close(handle);
 #endif
@@ -282,9 +284,11 @@ static int usb_device_open(usb_dev_handle **handlep, USBDevice_t *device, USBDev
 
 	/* libusb base init */
 #if WITH_LIBUSB_1_0
-	if (libusb_init(NULL) < 0) {
-		libusb_exit(NULL);
-		fatal_with_errno(EXIT_FAILURE, "Failed to init libusb 1.0");
+	if (!libusb_inited) {
+		if (libusb_init(NULL) < 0) {
+			fatal_with_errno(EXIT_FAILURE, "Failed to init libusb 1.0");
+		}
+		libusb_inited = 1;
 	}
 #else  /* => WITH_LIBUSB_0_1 */
 	usb_init();
@@ -582,6 +586,13 @@ void upsdrv_cleanup(void)
 	free(usbdevice.Product);
 	free(usbdevice.Serial);
 	free(usbdevice.Bus);
+
+#if WITH_LIBUSB_1_0
+	if (libusb_inited) {
+		libusb_exit(NULL);
+		libusb_inited = 0;
+	}
+#endif
 }
 
 void upsdrv_initinfo(void)
